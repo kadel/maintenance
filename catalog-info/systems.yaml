@@ -1,0 +1,80 @@
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: rhdh
+  title: Red Hat Developer Hub
+  description: RHDH platform, plugins, tooling, and CI infrastructure
+spec:
+  owner: user:default/kadel
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: demos
+  title: Demo Applications
+  description: Sample and demo applications for talks, workshops, and testing
+spec:
+  owner: user:default/kadel
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: personal-sites
+  title: Personal Websites
+  description: Personal and client websites
+spec:
+  owner: user:default/kadel
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: delirest
+  title: Delirest
+  description: Delirest business applications and tools
+spec:
+  owner: user:default/kadel
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: work-tracking
+  title: Work Tracking
+  description: Time tracking, work logging, and productivity tools
+spec:
+  owner: user:default/kadel
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: ai-projects
+  title: AI & Agent Projects
+  description: LLM integrations, agent tooling, and AI-assisted workflows
+spec:
+  owner: user:default/kadel
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: devtools
+  title: Developer Tools
+  description: CLI tools, editor configs, containers, and development utilities
+spec:
+  owner: user:default/kadel
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: homelab
+  title: Homelab
+  description: Home network and self-hosting infrastructure
+spec:
+  owner: user:default/kadel
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: legacy-infra
+  title: Legacy Infrastructure
+  description: Historical infrastructure tooling (Salt, Docker, Kubernetes)
+spec:
+  owner: user:default/kadel
