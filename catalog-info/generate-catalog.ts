@@ -136,44 +136,45 @@ function fetchRepoMetadata(): RepoMetadata[] {
   return JSON.parse(json);
 }
 
+interface ResolvedRepo {
+  name: string;
+  description: string;
+  system: string;
+  type: string;
+  lifecycle: string;
+  tags: string[];
+  defaultBranch: string;
+  yaml: string;
+}
+
 interface ProcessResult {
   repo: string;
   system: string;
   type: string;
   lifecycle: string;
-  status: "created" | "skipped" | "dry-run" | "error";
+  status: "pushed" | "local" | "committed" | "skipped" | "dry-run" | "error";
   error?: string;
 }
 
-function processRepo(
+function resolveRepo(
   name: string,
   repoConfig: RepoConfig,
-  metadata: RepoMetadata | undefined,
+  metadata: RepoMetadata,
   config: Config,
-  opts: { apply: boolean; push: boolean; workDir: string }
-): ProcessResult {
-  const result: ProcessResult = {
-    repo: name,
-    system: repoConfig.system,
-    type: "other",
-    lifecycle: config.defaults.lifecycleActive,
-    status: "dry-run",
-  };
+): ResolvedRepo {
+  const lang = metadata.primaryLanguage?.name ?? null;
+  const pushedAt = metadata.pushedAt ?? "";
 
-  const desc = metadata?.description ?? "";
-  const lang = metadata?.primaryLanguage?.name ?? null;
-  const pushedAt = metadata?.pushedAt ?? "";
-  const defaultBranch = metadata?.defaultBranchRef?.name ?? "main";
-
-  result.type = repoConfig.type ?? languageToType(lang);
-
+  let lifecycle: string;
   if (repoConfig.lifecycle) {
-    result.lifecycle = repoConfig.lifecycle;
+    lifecycle = repoConfig.lifecycle;
   } else if (pushedAt && isStale(pushedAt, config.defaults.lifecycleCutoffYears)) {
-    result.lifecycle = config.defaults.lifecycleStale;
+    lifecycle = config.defaults.lifecycleStale;
   } else {
-    result.lifecycle = config.defaults.lifecycleActive;
+    lifecycle = config.defaults.lifecycleActive;
   }
+
+  const type = repoConfig.type ?? languageToType(lang);
 
   const tags: string[] = [...(repoConfig.tags ?? [])];
   const langTag = languageToTag(lang);
@@ -183,28 +184,46 @@ function processRepo(
 
   const yaml = generateYaml(
     name,
-    desc,
+    metadata.description ?? "",
     repoConfig.system,
-    result.type,
-    result.lifecycle,
+    type,
+    lifecycle,
     config.defaults.owner,
-    tags
+    tags,
   );
 
-  if (!opts.apply) {
-    console.log(`\n--- ${name} ---`);
-    console.log(yaml);
-    return result;
-  }
+  return {
+    name,
+    description: metadata.description ?? "",
+    system: repoConfig.system,
+    type,
+    lifecycle,
+    tags,
+    defaultBranch: metadata.defaultBranchRef?.name ?? "main",
+    yaml,
+  };
+}
 
-  const repoDir = join(opts.workDir, name);
+function pushToRepo(
+  resolved: ResolvedRepo,
+  opts: { push: boolean; workDir: string },
+): ProcessResult {
+  const result: ProcessResult = {
+    repo: resolved.name,
+    system: resolved.system,
+    type: resolved.type,
+    lifecycle: resolved.lifecycle,
+    status: "committed",
+  };
+
+  const repoDir = join(opts.workDir, resolved.name);
   try {
     exec("git", [
       "clone", "--depth", "1",
-      `https://github.com/${GITHUB_USER}/${name}.git`, repoDir,
+      `https://github.com/${GITHUB_USER}/${resolved.name}.git`, repoDir,
     ]);
 
-    writeFileSync(join(repoDir, "catalog-info.yaml"), yaml);
+    writeFileSync(join(repoDir, "catalog-info.yaml"), resolved.yaml);
 
     exec("git", ["add", "catalog-info.yaml"], repoDir);
 
@@ -222,10 +241,11 @@ function processRepo(
     ], repoDir);
 
     if (opts.push) {
-      exec("git", ["push", "origin", defaultBranch], repoDir);
+      exec("git", ["push", "origin", resolved.defaultBranch], repoDir);
+      result.status = "pushed";
+    } else {
+      result.status = "committed";
     }
-
-    result.status = "created";
   } catch (e) {
     result.status = "error";
     result.error = e instanceof Error ? e.message : String(e);
@@ -315,19 +335,7 @@ function main() {
     repoNames = [values.repo];
   }
 
-  const workDir = join(tmpdir(), `backstage-catalog-gen-${process.pid}`);
-  if (values.apply) {
-    mkdirSync(workDir, { recursive: true });
-  }
-
-  const mode = values.apply
-    ? values.push
-      ? "APPLY + PUSH"
-      : "APPLY (no push)"
-    : "DRY RUN";
-  console.log(`\nMode: ${mode}`);
-  console.log(`Processing ${repoNames.length} repositories...\n`);
-
+  const resolved: ResolvedRepo[] = [];
   const results: ProcessResult[] = [];
 
   for (const name of repoNames) {
@@ -347,20 +355,79 @@ function main() {
       continue;
     }
 
-    const result = processRepo(name, repoConfig, metadata, config, {
-      apply: values.apply!,
-      push: values.push!,
-      workDir,
-    });
-    results.push(result);
-
-    if (values.push && result.status === "created") {
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
-    }
+    resolved.push(resolveRepo(name, repoConfig, metadata, config));
   }
 
-  if (values.apply && existsSync(workDir)) {
-    rmSync(workDir, { recursive: true, force: true });
+  const activeRepos = resolved.filter((r) => r.lifecycle !== config.defaults.lifecycleStale);
+  const staleRepos = resolved.filter((r) => r.lifecycle === config.defaults.lifecycleStale);
+
+  const mode = values.apply
+    ? values.push
+      ? "APPLY + PUSH"
+      : "APPLY (no push)"
+    : "DRY RUN";
+  console.log(`\nMode: ${mode}`);
+  console.log(`Active repos (push to each repo): ${activeRepos.length}`);
+  console.log(`Stale repos (local deprecated-components.yaml): ${staleRepos.length}`);
+  console.log();
+
+  // Stale repos: write to local deprecated-components.yaml
+  const deprecatedYaml = staleRepos.map((r) => r.yaml).join("---\n");
+  const deprecatedPath = join(__dirname, "deprecated-components.yaml");
+
+  if (!values.apply) {
+    console.log("=== DEPRECATED COMPONENTS (written to deprecated-components.yaml) ===\n");
+    for (const r of staleRepos) {
+      console.log(`--- ${r.name} ---`);
+      console.log(r.yaml);
+      results.push({
+        repo: r.name,
+        system: r.system,
+        type: r.type,
+        lifecycle: r.lifecycle,
+        status: "local",
+      });
+    }
+    console.log("=== ACTIVE COMPONENTS (pushed to each repo) ===\n");
+    for (const r of activeRepos) {
+      console.log(`--- ${r.name} ---`);
+      console.log(r.yaml);
+      results.push({
+        repo: r.name,
+        system: r.system,
+        type: r.type,
+        lifecycle: r.lifecycle,
+        status: "dry-run",
+      });
+    }
+  } else {
+    writeFileSync(deprecatedPath, deprecatedYaml);
+    console.log(`Wrote ${staleRepos.length} deprecated components to ${deprecatedPath}`);
+    for (const r of staleRepos) {
+      results.push({
+        repo: r.name,
+        system: r.system,
+        type: r.type,
+        lifecycle: r.lifecycle,
+        status: "local",
+      });
+    }
+
+    const workDir = join(tmpdir(), `backstage-catalog-gen-${process.pid}`);
+    mkdirSync(workDir, { recursive: true });
+
+    for (const r of activeRepos) {
+      const result = pushToRepo(r, { push: values.push!, workDir });
+      results.push(result);
+
+      if (values.push && result.status === "pushed") {
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+      }
+    }
+
+    if (existsSync(workDir)) {
+      rmSync(workDir, { recursive: true, force: true });
+    }
   }
 
   printSummary(results);
