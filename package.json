@@ -3,9 +3,7 @@
   "version": "1.0.0",
   "description": "Scripts to maintain GitHub repositories and profile",
   "scripts": {
-    "catalog": "tsx catalog-info/generate-catalog.ts",
-    "catalog:apply": "tsx catalog-info/generate-catalog.ts --apply",
-    "catalog:push": "tsx catalog-info/generate-catalog.ts --apply --push"
+    "catalog:validate": "tsx catalog-info/validate-catalog.ts"
   },
   "repository": {
     "type": "git",

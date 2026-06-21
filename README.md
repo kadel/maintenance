@@ -4,10 +4,14 @@ Scripts to maintain GitHub repositories and profile.
 
 ## catalog-info
 
-Generates [Backstage](https://backstage.io/) `catalog-info.yaml` entries for all GitHub repositories.
+Validates that every GitHub repository is registered in [Backstage](https://backstage.io/).
 
-- **Active repos** get `catalog-info.yaml` pushed directly into each repository.
-- **Deprecated repos** (not updated in 5+ years) get their entities written to a local `deprecated-components.yaml` in this repo to avoid necrobumping old repositories with unnecessary commits.
+For each **non-forked** repository on the `kadel` account, it requires that the repo is covered by either:
+
+- a `catalog-info.yaml` in the **repo root** on GitHub, or
+- a **local record** in `catalog-info/` — a `Component` entity (or any entity whose `github.com/project-slug` annotation points at the repo) in any `*.yaml` file there. Use this for deprecated/archived repos you don't want to necrobump with a commit.
+
+It also checks that each covered entity's `spec.owner` matches the expected owner. The command exits non-zero if any repo fails, so it can be used in CI.
 
 ### Setup
 
@@ -15,27 +19,36 @@ Generates [Backstage](https://backstage.io/) `catalog-info.yaml` entries for all
 npm install
 ```
 
-Requires `gh` (GitHub CLI) and `git` to be installed and authenticated.
+Requires `gh` (GitHub CLI) to be installed and authenticated.
 
 ### Usage
 
 ```bash
-# Dry run — preview generated YAML for all repos
-npm run catalog
+# Validate all non-forked repos
+npm run catalog:validate
 
-# Dry run for a single repo
-npm run catalog -- --repo ccwatch
+# Validate a single repo
+npm run catalog:validate -- --repo ccwatch
 
-# Apply — clone active repos, write catalog-info.yaml, commit (no push)
-# Also writes deprecated-components.yaml locally
-npm run catalog:apply
+# Include archived repos (skipped by default)
+npm run catalog:validate -- --include-archived
 
-# Apply and push active repos
-npm run catalog:push
+# Machine-readable output
+npm run catalog:validate -- --json
 ```
+
+Each repo is reported with one of the following statuses:
+
+| Status | Meaning |
+| --- | --- |
+| `ok-root` | Covered by a `catalog-info.yaml` in the repo root |
+| `ok-local` | Covered by a local record in `catalog-info/` |
+| `missing` | No root file and no local record — **fails** |
+| `owner-mismatch` | `spec.owner` differs from the expected owner — **fails** |
+| `no-owner` | Catalog entity has no `spec.owner` — **fails** |
 
 ### Configuration
 
-- **`catalog-info/repo-config.json`** — Maps each repo to a Backstage system, with optional overrides for `type`, `lifecycle`, and `tags`. Repos not updated in 5+ years are automatically marked `lifecycle: deprecated`.
+- **`catalog-info/repo-config.json`** — `defaults.owner` is the expected owner that every catalog entity's `spec.owner` is checked against.
 - **`catalog-info/systems.yaml`** — Backstage System entity definitions. Register as a Location in Backstage.
-- **`catalog-info/deprecated-components.yaml`** — Generated file containing Component entities for deprecated repos. Register as a Location in Backstage alongside `systems.yaml`.
+- **`catalog-info/*.yaml`** — Any YAML file here is scanned for local Component records (e.g. `deprecated-components.yaml`). Register these as Locations in Backstage alongside `systems.yaml`.
