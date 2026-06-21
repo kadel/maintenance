@@ -251,11 +251,11 @@ async function main() {
   }
 
   const config: Config = JSON.parse(
-    readFileSync(join(__dirname, "repo-config.json"), "utf-8"),
+    readFileSync(join(import.meta.dirname, "repo-config.json"), "utf-8"),
   );
   const expectedOwner = config.defaults.owner;
 
-  const localRecords = loadLocalRecords(__dirname);
+  const localRecords = loadLocalRecords(import.meta.dirname);
 
   console.error("Fetching repository list from GitHub...");
   let repos = fetchRepos(values["include-archived"]!);

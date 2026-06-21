@@ -21,11 +21,20 @@ npm install
 
 Requires `gh` (GitHub CLI) to be installed and authenticated.
 
+With Nix, no setup is needed — `nix run` provides `node` and `gh` and executes
+the validator directly (it uses Node's native TypeScript stripping, so there is
+no `npm install` step):
+
+```bash
+nix run .                       # or: nix run github:kadel/maintenance
+nix run . -- --repo ccwatch
+```
+
 ### Usage
 
 ```bash
 # Validate all non-forked repos
-npm run catalog:validate
+npm run catalog:validate          # or: nix run .
 
 # Validate a single repo
 npm run catalog:validate -- --repo ccwatch
@@ -36,6 +45,8 @@ npm run catalog:validate -- --include-archived
 # Machine-readable output
 npm run catalog:validate -- --json
 ```
+
+All flags work the same way after `nix run . --`, e.g. `nix run . -- --json`.
 
 Each repo is reported with one of the following statuses:
 

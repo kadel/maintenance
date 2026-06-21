@@ -17,6 +17,9 @@ npm run catalog:validate                 # Validate all non-forked repos
 npm run catalog:validate -- --repo NAME  # Validate a single repo
 npm run catalog:validate -- --include-archived
 npm run catalog:validate -- --json       # Machine-readable output
+
+nix run .                                # Same, via the flake (no npm install)
+nix run . -- --repo NAME                 # Flags pass through after `--`
 ```
 
 ## How the Catalog Validator Works
@@ -33,6 +36,7 @@ npm run catalog:validate -- --json       # Machine-readable output
 
 ## Tech Stack
 
-- TypeScript with `tsx` (dev dependency only)
+- ESM TypeScript. Runs under `tsx` (dev dependency) or bare `node
+  --experimental-strip-types` (Node 22+), which is how `nix run` invokes it
 - Zero runtime dependencies — shells out to `gh`; bounded-concurrency API calls
 - `node:util` parseArgs for CLI

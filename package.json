@@ -2,6 +2,7 @@
   "name": "maintenance",
   "version": "1.0.0",
   "description": "Scripts to maintain GitHub repositories and profile",
+  "type": "module",
   "scripts": {
     "catalog:validate": "tsx catalog-info/validate-catalog.ts"
   },
